@@ -1,0 +1,269 @@
+Program.Sub.Preflight.Start
+v.Global.sShipToAddr.Declare
+v.Global.sShipToID.Declare
+v.Global.sCustFrom.Declare
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'BN, Jan 2019
+'Customer: Mayo Manufacturing.
+'This project will change the Ship to Address to Company Address when user types in Ship Via the word PICKUP at the Sales Order screen (hook 11740)
+'If user use the Ship Via browser, the return of the value from the browser does not trigger any hook, so we will reinforce the Order Header screen with the pre Save hook (hook 11870).
+'The pre Save button hook will double check if the Ship to Address matches the Company address if the Ship Via is PICKUP.
+'The program will also set the SHIP ID to MAYO if if the Ship Via is PICKUP
+F.Intrinsic.Control.Try
+	V.Local.sError.Declare	
+	v.Local.bDifferent.Declare	
+	v.Local.sFlag.Declare
+	V.Local.sShipVia.Declare
+	V.Local.sShipID.Declare
+	v.Local.iCnt.Declare
+	v.Local.sCustFrom.Declare
+	v.Local.sCustTo.Declare
+	v.Local.sSQL.Declare
+	v.Local.sRet.Declare
+	v.Local.sFile.Declare
+	v.Local.bEx.Declare
+	V.Local.sHold.Declare
+	
+	f.Intrinsic.String.Build("{0}\CustomerMayo5851.txt",v.Caller.FilesDir,v.Local.sFile)
+	f.Intrinsic.File.Exists(v.Local.sFile,v.Local.bEx)
+	f.Intrinsic.Control.If(v.Local.bEx.Not)
+		f.Intrinsic.UI.Msgbox("Default Customer to copy MAYO ship to ID is not set. Please contact Global Shop","Error")
+		f.Intrinsic.Control.CallSub("Unload")
+	f.Intrinsic.Control.EndIf
+	F.Intrinsic.File.File2String(V.Local.sFile,V.Global.sCustFrom)
+	
+
+	'SHIP VIA type in hook
+	f.Intrinsic.Control.If(v.Caller.Hook,=,11740)
+		v.Local.sShipVia.Set(Variable.Passed.000028.Trim)
+		f.Intrinsic.Control.If(v.Local.sShipVia.UCase,=,"PICKUP")
+			'Check ShipToAddress
+			f.Intrinsic.Control.CallSub("Get_Mayo_Ship_To_Info")
+			'Change Ship To variables to Company Address
+			f.Intrinsic.Control.CallSub("Change_Ship_To_Info")
+			
+		f.Intrinsic.Control.EndIf	
+	'PreSave hook
+	f.Intrinsic.Control.ElseIf(v.Caller.Hook,=,11869,or,v.Caller.Hook,=,11810)
+		v.Local.sShipVia.Set(Variable.Passed.000028.Trim)
+		f.Intrinsic.Control.If(v.Local.sShipVia.UCase,=,"PICKUP")			
+			
+			'Pre Save Hook
+			'Check ShipToAddress
+			f.Intrinsic.Control.CallSub("Get_Mayo_Ship_To_Info")
+			'Compare
+			f.Intrinsic.Control.CallSub("Compare_String","sString1",Variable.Passed.000008,"sString2",v.Global.sShipToAddr(0))
+			v.Local.bDifferent.Set(v.Args.bDiff)
+			f.Intrinsic.Control.CallSub("Compare_String","sString1",Variable.Passed.000010,"sString2",v.Global.sShipToAddr(1))
+			v.Local.bDifferent.Set(v.Args.bDiff)
+			f.Intrinsic.Control.CallSub("Compare_String","sString1",Variable.Passed.000012,"sString2",v.Global.sShipToAddr(2))
+			v.Local.bDifferent.Set(v.Args.bDiff)
+			f.Intrinsic.Control.CallSub("Compare_String","sString1",Variable.Passed.000016,"sString2",v.Global.sShipToAddr(3))
+			v.Local.bDifferent.Set(v.Args.bDiff)
+			f.Intrinsic.Control.CallSub("Compare_String","sString1",Variable.Passed.000017,"sString2",v.Global.sShipToAddr(4))
+			v.Local.bDifferent.Set(v.Args.bDiff)
+			f.Intrinsic.Control.CallSub("Compare_String","sString1",Variable.Passed.000018,"sString2",v.Global.sShipToAddr(5))
+			v.Local.bDifferent.Set(v.Args.bDiff)
+			f.Intrinsic.Control.CallSub("Compare_String","sString1",Variable.Passed.000020,"sString2",v.Global.sShipToAddr(6))
+			v.Local.bDifferent.Set(v.Args.bDiff)
+			f.Intrinsic.Control.CallSub("Compare_String","sString1",Variable.Passed.000022,"sString2",v.Global.sShipToAddr(7))	
+			v.Local.bDifferent.Set(v.Args.bDiff)
+			f.Intrinsic.Control.CallSub("Compare_String","sString1",Variable.Passed.000061,"sString2","MAYO")
+			v.Local.bDifferent.Set(v.Args.bDiff)
+			
+			F.Intrinsic.Control.If(V.Local.bDifferent)
+				F.Intrinsic.UI.MsgBox("PICKUP Ship Via is selected. Ship ID will be changed to MAYO and Ship To Address will be changed MAYO address.", "Change Ship Info",4, v.Local.sFlag)
+				f.Intrinsic.Control.If(v.Local.sFlag,=,6)
+					'Change Ship To variables to Company Address
+					f.Intrinsic.Control.CallSub("Change_Ship_To_Info")
+				f.Intrinsic.Control.EndIf
+			F.Intrinsic.Control.EndIf			
+			
+		f.Intrinsic.Control.EndIf
+		
+	F.Intrinsic.Control.ElseIf(V.Caller.Hook,=,33310)
+		'f.Intrinsic.String.UCase(Variable.Passed.000003.Trim,v.Local.sShipID)
+		v.Local.sShipID.Set(Variable.Passed.000003.Trim)
+		f.Intrinsic.Control.If(v.Local.sShipID.UCase,=,"MAYO")
+			Variable.Passed.000031.Set("PICKUP")
+		F.Intrinsic.Control.EndIf
+		
+	f.Intrinsic.Control.ElseIf(v.Caller.Switches,=,"UAC")
+	
+		f.Intrinsic.UI.Inputbox("Please enter Customer number to copy MAYO ship ID from:","Customer Number",v.Global.sCustFrom,V.Global.sCustFrom)
+		f.ODBC.Connection!conx.OpenCompanyConnection
+		'Check
+		f.Intrinsic.String.Build("Select * from OE_MULTI_SHIP where customer = '{0}' and SHIP_SEQ = 'MAYO'",v.Global.sCustFrom,v.Local.sSQL)
+		f.ODBC.Connection!conx.ExecuteAndReturn(v.Local.sSQL,v.Local.sRet)
+		f.Intrinsic.Control.If(v.Local.sRet,=,"")
+			f.Intrinsic.UI.Msgbox("Can not find MAYO Ship ID for this customer.","Attention")
+			f.Intrinsic.Control.CallSub("Unload")
+		f.Intrinsic.Control.EndIf
+		'Update all customer
+		f.Intrinsic.String.Build("Select Customer from V_Customer_Master where customer <> '{0}' order by Customer",v.Global.sCustFrom,v.Local.sSQL)
+		F.Data.DataTable.CreateFromSQL("Cust","conx",v.Local.sSQL,True)
+		f.Intrinsic.Control.For(v.Local.iCnt,0,v.DataTable.Cust.RowCount--,1)
+			f.Intrinsic.String.Build("Delete from OE_MULTI_SHIP where customer = '{0}' and SHIP_SEQ = 'MAYO'",v.DataTable.Cust(v.Local.iCnt).Customer!FieldValString,v.Local.sSQL)
+			f.ODBC.Connection!conx.Execute(v.Local.sSQL)
+			f.Intrinsic.String.Build("Insert into OE_MULTI_SHIP (select '{0}',FILL_CUST,SHIP_SEQ,SHIPPING_ID,CUSTOMER_NAME,FILL_NAME,SHIP_ADDRESS1,FILL_ADDR1,SHIP_ADDRESS2,FILL_ADDR2,SHIP_ADDRESS3,FILL_ADDR3,SHIP_ADDRESS4,FILL_ADDR4,SHIP_ADDRESS5,FILL_ADDR5,SHIP_CITY,FILL_CITY,SHIP_STATE,SHIP_ZIP,SHIP_COUNTRY,FILL_COUNTRY,SHIP_ATTENTION,FILL_ATTN,FLAG_INTL,SHIP_SALESPERSON,SHIP_VIA,SHIP_AREA,SHIP_BRANCH,SHIP_TAX_E_NO,SHIP_GL_ACCT,SHIP_TAX_STATE,SHIP_TAX_ZIP,'' as SHIP_TAX_1,'' as SHIP_TAX_2,'' as SHIP_TAX_3,'' as SHIP_TAX_4,'' as SHIP_TAX_5,'' as SHIP_TAX_6,'' as SHIP_TAX_7,'' as SHIP_TAX_8,'' as SHIP_TAX_9,'' as SHIP_TAX_10,SHIP_COMM_R_TYPE,SHIP_PRICE_CLASS,SHIP_GEO_CD,WHO_LAST_CHG,TRM_LAST_CHG,DATE_LAST_CHG,TIME_LAST_CHG,SHIP_FRT_ZONE,SHIP_DISCOUNT,SHIP_TELEPHONE,SHIP_FAX,FILLER2,SHIP_SIC,FILL_SIC,FILLER6,PRIMARY_GRP,SECONDARY_GRP,CARRIER_CD,THRD_PRTY_CUST,INTL_CITY_FLD,INTL_CNTRY_FLD,FILLER33,ORIG_LOCN_FLG,TAX_INDX_FLG,SHIP_LOCN,SHIP_TAX_ZONE_1,SHIP_TAX_ZONE_2,SHIP_TAX_ZONE_3,SHIP_TAX_ZONE_4,SHIP_TAX_ZONE_5,SHIP_TAX_ZONE_6,SHIP_TAX_ZONE_7,SHIP_TAX_ZONE_8,SHIP_TAX_ZONE_9,SHIP_TAX_ZONE_10,SHIP_TAX_IMPORT_FLG,SHIP_VAT_RULE_ID,SHIP_VAT_EXEMPT_TYPE,SHIP_TAX_IN_PRC_FLG,SHIP_SRVC_TYPE,SHIP_COUNTY,PRINT_COMM_INV,COMM_IV_INT_SHP,FILLER from  OE_MULTI_SHIP where Customer = '{1}' and SHIP_SEQ = 'MAYO')",v.DataTable.Cust(v.Local.iCnt).Customer!FieldValString,v.Global.sCustFrom,v.Local.sSQL)	
+			f.ODBC.Connection!conx.Execute(v.Local.sSQL)
+			F.Intrinsic.String.Build("Update OE_MULTI_SHIP o set SHIP_PRICE_CLASS = (Select price_class from v_Customer_Sales s where s.customer = '{0}') where o.Customer = '{0}' and SHIP_SEQ = 'MAYO' ",v.DataTable.Cust(v.Local.iCnt).Customer!FieldValString,v.Local.sSQL)
+			f.ODBC.Connection!conx.Execute(v.Local.sSQL)
+			
+		f.Intrinsic.Control.Next(v.Local.iCnt)
+		f.ODBC.Connection!conx.Close
+		f.Intrinsic.UI.Msgbox("Done")
+	f.Intrinsic.Control.ElseIf(v.Caller.Switches,=,"UCC")
+		f.ODBC.Connection!conx.OpenCompanyConnection
+		f.Intrinsic.UI.Inputbox("Please enter Customer number to copy MAYO ship ID from:","Customer Copied From",v.Global.sCustFrom,v.Global.sCustFrom)
+		f.Intrinsic.UI.Inputbox("Please enter Customer number to copy MAYO ship ID to:","Customer Copied To","",v.Local.sCustTo)
+		'Check
+		f.Intrinsic.String.Build("Select * from OE_MULTI_SHIP where customer = '{0}' and SHIP_SEQ = 'MAYO'",v.Global.sCustFrom,v.Local.sSQL)
+		f.ODBC.Connection!conx.ExecuteAndReturn(v.Local.sSQL,v.Local.sRet)
+		f.Intrinsic.Control.If(v.Local.sRet,=,"")
+			f.Intrinsic.UI.Msgbox("Can not find MAYO Ship ID for this customer.","Attention")
+			f.Intrinsic.Control.CallSub("Unload")
+		f.Intrinsic.Control.EndIf		
+		'Copy	
+		f.Intrinsic.String.Build("Delete from OE_MULTI_SHIP where customer = '{0}' and SHIP_SEQ = 'MAYO'",v.Local.sCustTo,v.Local.sSQL)
+		f.ODBC.Connection!conx.Execute(v.Local.sSQL)
+		f.Intrinsic.String.Build("Insert into OE_MULTI_SHIP (select '{0}',FILL_CUST,SHIP_SEQ,SHIPPING_ID,CUSTOMER_NAME,FILL_NAME,SHIP_ADDRESS1,FILL_ADDR1,SHIP_ADDRESS2,FILL_ADDR2,SHIP_ADDRESS3,FILL_ADDR3,SHIP_ADDRESS4,FILL_ADDR4,SHIP_ADDRESS5,FILL_ADDR5,SHIP_CITY,FILL_CITY,SHIP_STATE,SHIP_ZIP,SHIP_COUNTRY,FILL_COUNTRY,SHIP_ATTENTION,FILL_ATTN,FLAG_INTL,SHIP_SALESPERSON,SHIP_VIA,SHIP_AREA,SHIP_BRANCH,SHIP_TAX_E_NO,SHIP_GL_ACCT,SHIP_TAX_STATE,SHIP_TAX_ZIP,'' as SHIP_TAX_1,'' as SHIP_TAX_2,'' as SHIP_TAX_3,'' as SHIP_TAX_4,'' as SHIP_TAX_5,'' as SHIP_TAX_6,'' as SHIP_TAX_7,'' as SHIP_TAX_8,'' as SHIP_TAX_9,'' as SHIP_TAX_10,SHIP_COMM_R_TYPE,SHIP_PRICE_CLASS,SHIP_GEO_CD,WHO_LAST_CHG,TRM_LAST_CHG,DATE_LAST_CHG,TIME_LAST_CHG,SHIP_FRT_ZONE,SHIP_DISCOUNT,SHIP_TELEPHONE,SHIP_FAX,FILLER2,SHIP_SIC,FILL_SIC,FILLER6,PRIMARY_GRP,SECONDARY_GRP,CARRIER_CD,THRD_PRTY_CUST,INTL_CITY_FLD,INTL_CNTRY_FLD,FILLER33,ORIG_LOCN_FLG,TAX_INDX_FLG,SHIP_LOCN,SHIP_TAX_ZONE_1,SHIP_TAX_ZONE_2,SHIP_TAX_ZONE_3,SHIP_TAX_ZONE_4,SHIP_TAX_ZONE_5,SHIP_TAX_ZONE_6,SHIP_TAX_ZONE_7,SHIP_TAX_ZONE_8,SHIP_TAX_ZONE_9,SHIP_TAX_ZONE_10,SHIP_TAX_IMPORT_FLG,SHIP_VAT_RULE_ID,SHIP_VAT_EXEMPT_TYPE,SHIP_TAX_IN_PRC_FLG,SHIP_SRVC_TYPE,SHIP_COUNTY,PRINT_COMM_INV,COMM_IV_INT_SHP,FILLER from  OE_MULTI_SHIP where Customer = '{1}' and SHIP_SEQ = 'MAYO')",v.Local.sCustTo,v.Global.sCustFrom,v.Local.sSQL)	
+		f.ODBC.Connection!conx.Execute(v.Local.sSQL)
+		
+		F.Intrinsic.String.Build("Update OE_MULTI_SHIP o set SHIP_PRICE_CLASS = (Select price_class from v_Customer_Sales s where s.customer = '{0}') where o.Customer = '{0}' and SHIP_SEQ = 'MAYO' ",v.Local.sCustTo,v.Local.sSQL)
+		f.ODBC.Connection!conx.Execute(v.Local.sSQL)
+		
+		f.ODBC.Connection!conx.Close
+		f.Intrinsic.UI.Msgbox("Done")
+	f.Intrinsic.Control.EndIf
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Subroutine called from:{6}{1}Error Occurred: {3}{1}Description: {4}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,v.Ambient.SubroutineCalledFrom,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.UnLoad.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+
+	F.Intrinsic.Control.If(V.ODBC.conx.State,=,1)
+		F.ODBC.Connection!conx.close
+	F.Intrinsic.Control.EndIf
+	
+	f.Intrinsic.Control.End
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Subroutine called from:{6}{1}Error Occurred: {3}{1}Description: {4}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,v.Ambient.SubroutineCalledFrom,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End	
+F.Intrinsic.Control.EndTry
+Program.Sub.UnLoad.End
+
+Program.Sub.Get_Mayo_Ship_To_Info.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.sSQL.Declare
+	
+	f.ODBC.Connection!conx.OpenCompanyConnection
+	'Check Ship To ID MAYO as a sample
+	f.Intrinsic.String.Build("select TOP 1 Customer_Name,SHIP_ADDRESS1,SHIP_ADDRESS2,SHIP_CITY,SHIP_STATE,SHIP_ZIP,SHIP_COUNTRY,SHIP_ATTENTION,   SHIP_ADDRESS3,SHIP_ADDRESS4,SHIP_ADDRESS5,  SHIP_TELEPHONE   from OE_MULTI_SHIP where customer = '{0}' and SHIP_SEQ = 'MAYO'",v.Global.sCustFrom,v.Local.sSQL)
+	f.ODBC.Connection!conx.ExecuteAndReturn(v.Local.sSQL,v.Global.sShipToAddr)
+	'Get MAYO Ship to Address",v.Global.sShipToAddr)
+	f.Intrinsic.Control.If(v.Global.sShipToAddr,=,"")
+		f.Intrinsic.String.Build("MAYO Ship to Address is not found for the default customer from '{0}'. Please contact Global Shop",v.Global.sCustFrom,v.Local.sError)
+		f.Intrinsic.UI.Msgbox(v.Local.sError,"Attention")
+		F.Intrinsic.Control.CallSub("Unload")
+	f.Intrinsic.Control.EndIf
+	f.Intrinsic.String.Split(v.Global.sShipToAddr,"*!*",v.Global.sShipToAddr)
+	
+	'Check Ship To ID MAYO for this customer
+	f.Intrinsic.String.Build("Select Top 1 Ucase(ltrim(rtrim(ship_seq))) as Ship_Seq from v_OE_MULTI_SHIP where Customer = '{0}' and Ucase(rtrim(Ship_Seq)) = 'MAYO'",Variable.Passed.000006,v.Local.sSQL)
+	f.ODBC.Connection!conx.ExecuteAndReturn(V.Local.sSQL,v.Global.sShipToID)
+	f.Intrinsic.Control.If(v.Global.sShipToID,=,"")
+		'MAYO Ship To ID is not found for this customer, now create one from sample
+		f.Intrinsic.String.Build("Insert into OE_MULTI_SHIP (select '{0}',FILL_CUST,SHIP_SEQ,SHIPPING_ID,CUSTOMER_NAME,FILL_NAME,SHIP_ADDRESS1,FILL_ADDR1,SHIP_ADDRESS2,FILL_ADDR2,SHIP_ADDRESS3,FILL_ADDR3,SHIP_ADDRESS4,FILL_ADDR4,SHIP_ADDRESS5,FILL_ADDR5,SHIP_CITY,FILL_CITY,SHIP_STATE,SHIP_ZIP,SHIP_COUNTRY,FILL_COUNTRY,SHIP_ATTENTION,FILL_ATTN,FLAG_INTL,SHIP_SALESPERSON,SHIP_VIA,SHIP_AREA,SHIP_BRANCH,SHIP_TAX_E_NO,SHIP_GL_ACCT,SHIP_TAX_STATE,SHIP_TAX_ZIP,'' as SHIP_TAX_1,'' as SHIP_TAX_2,'' as SHIP_TAX_3,'' as SHIP_TAX_4,'' as SHIP_TAX_5,'' as SHIP_TAX_6,'' as SHIP_TAX_7,'' as SHIP_TAX_8,'' as SHIP_TAX_9,'' as SHIP_TAX_10,SHIP_COMM_R_TYPE,SHIP_PRICE_CLASS,SHIP_GEO_CD,WHO_LAST_CHG,TRM_LAST_CHG,DATE_LAST_CHG,TIME_LAST_CHG,SHIP_FRT_ZONE,SHIP_DISCOUNT,SHIP_TELEPHONE,SHIP_FAX,FILLER2,SHIP_SIC,FILL_SIC,FILLER6,PRIMARY_GRP,SECONDARY_GRP,CARRIER_CD,THRD_PRTY_CUST,INTL_CITY_FLD,INTL_CNTRY_FLD,FILLER33,ORIG_LOCN_FLG,TAX_INDX_FLG,SHIP_LOCN,SHIP_TAX_ZONE_1,SHIP_TAX_ZONE_2,SHIP_TAX_ZONE_3,SHIP_TAX_ZONE_4,SHIP_TAX_ZONE_5,SHIP_TAX_ZONE_6,SHIP_TAX_ZONE_7,SHIP_TAX_ZONE_8,SHIP_TAX_ZONE_9,SHIP_TAX_ZONE_10,SHIP_TAX_IMPORT_FLG,SHIP_VAT_RULE_ID,SHIP_VAT_EXEMPT_TYPE,SHIP_TAX_IN_PRC_FLG,SHIP_SRVC_TYPE,SHIP_COUNTY,PRINT_COMM_INV,COMM_IV_INT_SHP,FILLER from  OE_MULTI_SHIP where Customer = '{1}' and SHIP_SEQ = 'MAYO')",Variable.Passed.000006,v.Global.sCustFrom,v.Local.sSQL)
+		f.ODBC.Connection!conx.Execute(v.Local.sSQL)
+		F.Intrinsic.String.Build("Update OE_MULTI_SHIP o set SHIP_PRICE_CLASS = (Select price_class from v_Customer_Sales s where s.customer = '{0}') where o.Customer = '{0}' and SHIP_SEQ = 'MAYO' ",Variable.Passed.000006,v.Local.sSQL)
+		f.ODBC.Connection!conx.Execute(v.Local.sSQL)		
+	f.Intrinsic.Control.EndIf	
+	F.ODBC.Connection!conx.close
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Subroutine called from:{6}{1}Error Occurred: {3}{1}Description: {4}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,v.Ambient.SubroutineCalledFrom,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+Program.Sub.Get_Mayo_Ship_To_Info.End
+
+Program.Sub.Change_Ship_To_Info.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	'Variable.Passed.000008: Ship To Name
+	'Variable.Passed.000010: Ship To Address 1
+	'Variable.Passed.000012: Ship To Address 2
+	'Variable.Passed.000016: Ship To City
+	'Variable.Passed.000017: Ship To State
+	'Variable.Passed.000018: Ship To Zip
+	'Variable.Passed.000020: Ship To Country
+	'Variable.Passed.000022: Ship To Attention
+	
+	'Variable.Passed.000028: Ship Via
+	'Variable.Passed.000061: Ship To ID
+	
+	'Variable.Passed.000057: Ship To Address 3
+	'Variable.Passed.000058: Ship To Address 4
+	'Variable.Passed.000059: Ship To Address 5
+	
+	'Variable.Passed.000051: Contact Phone
+	'Variable.Passed.000169: Contact Ext
+
+	Variable.Passed.000028.Set("PICKUP")
+	'Set Ship To Address
+	Variable.Passed.000008.Set(v.Global.sShipToAddr(0).Trim)
+	Variable.Passed.000010.Set(v.Global.sShipToAddr(1).Trim)
+	Variable.Passed.000012.Set(v.Global.sShipToAddr(2).Trim)
+	Variable.Passed.000016.Set(v.Global.sShipToAddr(3).Trim)
+	Variable.Passed.000017.Set(v.Global.sShipToAddr(4).Trim)
+	Variable.Passed.000018.Set(v.Global.sShipToAddr(5).Trim)
+	Variable.Passed.000020.Set(v.Global.sShipToAddr(6).Trim)
+	Variable.Passed.000022.Set(v.Global.sShipToAddr(7).Trim)
+	Variable.Passed.000057.Set(v.Global.sShipToAddr(8).Trim)
+	Variable.Passed.000058.Set(v.Global.sShipToAddr(9).Trim)
+	Variable.Passed.000059.Set(v.Global.sShipToAddr(10).Trim)	
+	Variable.Passed.000051.Set(v.Global.sShipToAddr(11).Trim)
+	
+	'Set Ship To ID
+	Variable.Passed.000061.Set("MAYO")
+		
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Subroutine called from:{6}{1}Error Occurred: {3}{1}Description: {4}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,v.Ambient.SubroutineCalledFrom,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+Program.Sub.Change_Ship_To_Info.End
+
+Program.Sub.Compare_String.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.sString1.Declare
+	v.Local.sString2.Declare
+	v.Local.bDiff.Declare
+	
+	v.Local.sString1.Set(v.Args.sString1.Trim)
+	v.Local.sString2.Set(v.Args.sString2.Trim)
+	
+	f.Intrinsic.Control.If(v.Local.sString1.UCase,<>,v.Local.sString2.UCase)
+		v.Local.bDiff.Set(True)
+	f.Intrinsic.Control.EndIf
+	f.Intrinsic.Variable.AddRV("bDiff",v.Local.bDiff)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Subroutine called from:{6}{1}Error Occurred: {3}{1}Description: {4}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,v.Ambient.SubroutineCalledFrom,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+Program.Sub.Compare_String.End
